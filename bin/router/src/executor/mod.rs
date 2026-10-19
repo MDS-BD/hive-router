@@ -1,3 +1,4 @@
+pub mod authentication;
 pub mod coprocessor;
 pub mod execution;
 pub mod execution_context;

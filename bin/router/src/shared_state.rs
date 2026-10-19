@@ -3,6 +3,7 @@ use crate::config::traffic_shaping::{
     TrafficShapingRouterDedupeHeadersConfig, TrafficShapingRouterDedupeHeadersKeyword,
 };
 use crate::config::HiveRouterConfig;
+use crate::executor::authentication::SubgraphAuthRuntime;
 use crate::executor::coprocessor::{CoprocessorError, CoprocessorRuntime};
 use crate::executor::execution::plan::FailedExecutionResult;
 use crate::executor::executors::common::InboundRequestFingerprint;
@@ -327,6 +328,8 @@ pub struct RouterSharedState {
     /// but no longer than `exp` date.
     pub jwt_claims_cache: JwtClaimsCache,
     pub jwt_auth_runtime: Option<JwtAuthRuntime>,
+    /// Subgraph request authentication service (e.g. AWS SigV4 signing).
+    pub subgraph_auth_service: Option<SubgraphAuthRuntime>,
     pub introspection_policy: BooleanOrProgram,
     pub telemetry_context: Arc<TelemetryContext>,
     pub coprocessor: Option<CoprocessorRuntime>,
@@ -349,6 +352,7 @@ impl RouterSharedState {
     pub fn new(
         router_config: &'static HiveRouterConfig,
         jwt_auth_runtime: Option<JwtAuthRuntime>,
+        subgraph_auth_service: Option<SubgraphAuthRuntime>,
         validation_plan: ValidationPlan,
         telemetry_context: Arc<TelemetryContext>,
         plugins: Option<Arc<Vec<RouterPluginBoxed>>>,
@@ -384,6 +388,7 @@ impl RouterSharedState {
                 .build(),
             router_config,
             jwt_auth_runtime,
+            subgraph_auth_service,
             introspection_policy: compile_introspection_policy(&router_config.introspection)
                 .map_err(Box::new)?,
             telemetry_context,

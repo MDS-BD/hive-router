@@ -136,6 +136,14 @@ md5 = "0.8.0"
 bytes = { workspace = true }
 object_store = { workspace = true }
 
+# AWS SigV4
+reqsign-aws-v4 = { workspace = true }
+reqsign-core = { workspace = true }
+reqsign-file-read-tokio = { workspace = true }
+reqsign-http-send-reqwest = { workspace = true }
+sha2 = "0.10"
+hex = "0.4"
+
 # query-planner
 petgraph = "0.8.2"
 bitflags = "2.12.1"

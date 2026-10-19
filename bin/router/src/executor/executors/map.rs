@@ -13,6 +13,7 @@ use crate::config::{
         TrafficShapingSubgraphCompressionConfig, WebSocketExecuteMode,
     },
 };
+use crate::executor::authentication::SubgraphAuthRuntime;
 use crate::executor::executors::inflight::InFlightMap;
 use crate::telemetry::logging::{summary, targets};
 use crate::telemetry::TelemetryContext;
@@ -155,6 +156,8 @@ struct SubgraphExecutorConfig {
 pub struct SubgraphExecutorMap {
     http_executors_by_subgraph: ExecutorsBySubgraphMap,
     subscription_executors_by_subgraph: ExecutorsBySubgraphMap,
+    /// Subgraph request authentication service (e.g. AWS SigV4 signing).
+    subgraph_auth_service: Option<Arc<SubgraphAuthRuntime>>,
     /// Mapping from subgraph name to static endpoint for quick lookup
     /// based on subgraph SDL and static overrides from router's config.
     static_endpoints_by_subgraph: StaticEndpointsBySubgraphMap,
@@ -187,6 +190,7 @@ impl SubgraphExecutorMap {
         config: Arc<SubgraphExecutorConfig>,
         global_timeout: DurationOrProgram,
         telemetry_context: Arc<TelemetryContext>,
+        subgraph_auth_service: Option<Arc<SubgraphAuthRuntime>>,
     ) -> Result<Self, SubgraphExecutorError> {
         let mut client_builder = Client::builder(TokioExecutor::new());
         client_builder
@@ -205,6 +209,7 @@ impl SubgraphExecutorMap {
         Ok(SubgraphExecutorMap {
             http_executors_by_subgraph: Default::default(),
             subscription_executors_by_subgraph: Default::default(),
+            subgraph_auth_service,
             static_endpoints_by_subgraph: Default::default(),
             expression_endpoints_by_subgraph: Default::default(),
             all_endpoint_expression: Default::default(),
@@ -230,6 +235,7 @@ impl SubgraphExecutorMap {
         callback: Option<HttpCallbackRuntimeConfig>,
         telemetry_context: Arc<TelemetryContext>,
         active_callback_subscriptions: CallbackSubscriptionsMap,
+        subgraph_auth_service: Option<Arc<SubgraphAuthRuntime>>,
     ) -> Result<Self, SubgraphExecutorError> {
         let config = Arc::new(SubgraphExecutorConfig {
             traffic_shaping,
@@ -245,8 +251,12 @@ impl SubgraphExecutorMap {
                         err.diagnostics,
                     )
                 })?;
-        let mut subgraph_executor_map =
-            SubgraphExecutorMap::new(config.clone(), global_timeout, telemetry_context)?;
+        let mut subgraph_executor_map = SubgraphExecutorMap::new(
+            config.clone(),
+            global_timeout,
+            telemetry_context,
+            subgraph_auth_service,
+        )?;
         subgraph_executor_map.callback_subscriptions = active_callback_subscriptions;
 
         // The `all` expression is configured once but evaluated against each subgraph.
@@ -868,6 +878,9 @@ impl SubgraphExecutorMap {
                     self.config.subscriptions.subgraph_buffer_capacity,
                     subgraph_config.compression.request,
                     subgraph_config.compression.response.accept_encoding,
+                    self.subgraph_auth_service
+                        .as_ref()
+                        .and_then(|s| s.get(subgraph_name).cloned()),
                 )
                 .to_boxed_arc();
 

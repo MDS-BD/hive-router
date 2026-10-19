@@ -14,6 +14,9 @@ pub enum SubgraphExecutorError {
     #[error("Failed to parse endpoint \"{0}\" as URI: {1}")]
     #[strum(serialize = "SUBGRAPH_ENDPOINT_PARSE_FAILURE")]
     EndpointParseFailure(String, InvalidUri),
+    #[error("Subgraph request authentication failed: {0}")]
+    #[strum(serialize = "SUBGRAPH_AUTHENTICATION_FAILURE")]
+    Authentication(String),
     #[error("Failed to build WebSocket endpoint \"{0}\" as URI: {1}")]
     #[strum(serialize = "SUBGRAPH_WEBSOCKET_ENDPOINT_BUILD_FAILURE")]
     WebSocketEndpointBuildFailure(String, http::Error),

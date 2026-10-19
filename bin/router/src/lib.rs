@@ -598,6 +598,12 @@ pub async fn configure_app_from_config(
         false => None,
     };
 
+    let subgraph_auth_service = crate::executor::authentication::SubgraphAuthRuntime::from_config(
+        &router_config.aws_sig_v4,
+    )
+    .await
+    .expect("Failed to initialize subgraph authentication service");
+
     let plugins_arc = plugin_registry.initialize_plugins(router_config, bg_tasks_manager)?;
 
     let active_subscriptions =
@@ -621,6 +627,7 @@ pub async fn configure_app_from_config(
         storage_manager.clone(),
         persisted_documents_background_tasks,
         hive_usage_reporting_background_tasks,
+        subgraph_auth_service.clone().map(Arc::new),
     )
     .await?;
     let schema_state_arc = Arc::new(schema_state);
@@ -645,6 +652,7 @@ pub async fn configure_app_from_config(
     let shared_state = Arc::new(RouterSharedState::new(
         router_config,
         jwt_runtime,
+        subgraph_auth_service,
         validation_plan,
         telemetry_context_arc.clone(),
         plugins_arc,

@@ -64,6 +64,8 @@ pub struct HTTPSubgraphExecutor {
     pub telemetry_context: Arc<TelemetryContext>,
     pub subgraph_buffer_capacity: usize,
     pub compression: TrafficShapingSubgraphRequestCompressionConfig,
+    /// Optional AWS SigV4 signer for this subgraph.
+    pub aws_signer: Option<Arc<crate::executor::authentication::AwsSigner>>,
 }
 
 const FIRST_VARIABLE_STR: &[u8] = b",\"variables\":{";
@@ -175,6 +177,7 @@ impl HTTPSubgraphExecutor {
         subgraph_buffer_capacity: usize,
         compression: TrafficShapingSubgraphRequestCompressionConfig,
         accept_encoding: AcceptEncodingConfig,
+        aws_signer: Option<Arc<crate::executor::authentication::AwsSigner>>,
     ) -> Self {
         let mut header_map = HeaderMap::new();
         header_map.insert(
@@ -205,6 +208,7 @@ impl HTTPSubgraphExecutor {
             telemetry_context,
             subgraph_buffer_capacity,
             compression,
+            aws_signer,
         }
     }
 }
@@ -437,6 +441,53 @@ impl SubgraphExecutor for HTTPSubgraphExecutor {
             deduplicate_request = start_payload.deduplicate_request;
         }
 
+        // Sign the request with AWS SigV4 if configured for this subgraph.
+        // Skip if a plugin already returned a response (no actual request will be sent).
+        if response.is_none() {
+            if let Some(signer) = &self.aws_signer {
+                let (mut parts, _) = http::Request::new(()).into_parts();
+                parts.method = method.clone();
+                parts.uri = self.endpoint.clone();
+                // Copy only safe headers to the signing parts. Skip:
+                // - connection: removed by HTTP/2, would mismatch signature
+                // - authorization: will be replaced by SigV4 value
+                // - non-ASCII values: reqsign panics on to_str()
+                for (key, value) in execution_request.headers.iter() {
+                    if key == http::header::CONNECTION || key == http::header::AUTHORIZATION {
+                        continue;
+                    }
+                    if value.to_str().is_err() {
+                        continue;
+                    }
+                    parts.headers.insert(key.clone(), value.clone());
+                }
+
+                if self.compression.enabled && signer.payload_signing {
+                    signer
+                        .sign_unsigned(&mut parts)
+                        .await
+                        .map_err(|e| SubgraphExecutorError::Authentication(e.to_string()))?;
+                } else {
+                    signer
+                        .sign(&mut parts, &body)
+                        .await
+                        .map_err(|e| SubgraphExecutorError::Authentication(e.to_string()))?;
+                }
+
+                for key in &[
+                    http::header::AUTHORIZATION,
+                    http::header::HeaderName::from_static("x-amz-date"),
+                    http::header::HeaderName::from_static("x-amz-content-sha256"),
+                    http::header::HeaderName::from_static("x-amz-security-token"),
+                    http::header::HeaderName::from_static("x-amz-s3session-token"),
+                ] {
+                    if let Some(value) = parts.headers.get(key) {
+                        execution_request.headers.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+        } // response.is_none()
+
         let mut deduplication_hint = DeduplicationHint::NotDeduped;
         let mut http_request_capture = None;
 
@@ -607,26 +658,63 @@ impl SubgraphExecutor for HTTPSubgraphExecutor {
         let buffer_capacity = self.subgraph_buffer_capacity;
         let body = build_request_body(&execution_request)?;
 
+        let mut req_headers = execution_request.headers;
+        self.header_map.iter().for_each(|(key, value)| {
+            req_headers.insert(key, value.clone());
+        });
+
+        // Sign with AWS SigV4 if configured.
+        if let Some(signer) = &self.aws_signer {
+            let (mut parts, _) = http::Request::new(()).into_parts();
+            parts.method = http::Method::POST;
+            parts.uri = self.endpoint.clone();
+            // Skip connection (HTTP/2 removes it), authorization (will be replaced),
+            // accept (subscriptions overwrite it below), and non-ASCII values.
+            for (key, value) in req_headers.iter() {
+                if key == http::header::CONNECTION
+                    || key == http::header::AUTHORIZATION
+                    || key == http::header::ACCEPT
+                {
+                    continue;
+                }
+                if value.to_str().is_err() {
+                    continue;
+                }
+                parts.headers.insert(key.clone(), value.clone());
+            }
+
+            signer
+                .sign(&mut parts, &body)
+                .await
+                .map_err(|e| SubgraphExecutorError::Authentication(e.to_string()))?;
+
+            for key in &[
+                http::header::AUTHORIZATION,
+                http::header::HeaderName::from_static("x-amz-date"),
+                http::header::HeaderName::from_static("x-amz-content-sha256"),
+                http::header::HeaderName::from_static("x-amz-security-token"),
+                http::header::HeaderName::from_static("x-amz-s3session-token"),
+            ] {
+                if let Some(value) = parts.headers.get(key) {
+                    req_headers.insert(key.clone(), value.clone());
+                }
+            }
+        }
+
         let mut req = hyper::Request::builder()
             .method(http::Method::POST)
             .uri(&self.endpoint)
             .version(Version::HTTP_11)
             .body(Full::new(Bytes::from(body)))?;
 
-        let mut headers = execution_request.headers;
-        self.header_map.iter().for_each(|(key, value)| {
-            headers.insert(key, value.clone());
-        });
-
         // Prefer multipart over SSE for subscriptions
-        // https://www.apollographql.com/docs/graphos/routing/operations/subscriptions/multipart-protocol
-        headers.insert(
+        req_headers.insert(
             http::header::ACCEPT,
             HeaderValue::from_static(
                 r#"multipart/mixed;subscriptionSpec="1.0", text/event-stream"#,
             ),
         );
-        *req.headers_mut() = headers;
+        *req.headers_mut() = req_headers;
 
         debug!(
             target: targets::HTTP_CLIENT,

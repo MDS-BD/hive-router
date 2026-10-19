@@ -6,6 +6,7 @@ use crate::executor::execution::operation_name::OperationNameForwardConfig;
 use crate::executor::executors::http_callback::{CallbackMessage, CallbackSubscriptionsMap};
 use crate::executor::response::graphql_error::GraphQLErrorExtensions;
 use crate::executor::{
+    authentication::SubgraphAuthRuntime,
     execution::error_masking::ErrorMaskingRuntime,
     executors::{error::SubgraphExecutorError, map::HttpCallbackRuntimeConfig},
     hooks::on_supergraph_load::{
@@ -222,6 +223,12 @@ impl RouterSupergraphRuntime {
             );
         }
 
+        warn_unknown_subgraphs(
+            "aws_sig_v4.subgraphs",
+            &known_subgraphs,
+            snapshot.options.aws_sig_v4.subgraphs.keys(),
+        );
+
         let subgraph_executor_map = Arc::new(SubgraphExecutorMap::from_http_endpoint_map(
             &snapshot.planner.supergraph.subgraph_endpoint_map,
             snapshot.options.traffic_shaping.clone(),
@@ -230,6 +237,7 @@ impl RouterSupergraphRuntime {
             context.callback.clone(),
             context.telemetry.clone(),
             context.callback_subscriptions.clone(),
+            context.subgraph_auth_service.clone(),
         )?);
         let operation_name_forward_config = Arc::new(OperationNameForwardConfig::new(
             &snapshot.options.traffic_shaping,
@@ -348,6 +356,8 @@ pub struct RouterSupergraphRuntimeContext {
     hive: Option<HiveTelemetryConfig>,
     storage_manager: Arc<StorageManager>,
     graphql_endpoint: String,
+    /// Subgraph request authentication service (e.g. AWS SigV4 signing).
+    pub subgraph_auth_service: Option<Arc<SubgraphAuthRuntime>>,
 }
 
 /// One selected supergraph for a request: the schema snapshot plus the router runtime built for
@@ -705,6 +715,7 @@ impl SchemaState {
         storage_manager: Arc<StorageManager>,
         persisted_documents_background_tasks: PersistedDocumentsBackgroundTaskController,
         hive_usage_reporting_background_tasks: HiveUsageReportingBackgroundTaskController,
+        subgraph_auth_service: Option<Arc<SubgraphAuthRuntime>>,
     ) -> Result<Self, SupergraphManagerError> {
         let configured: Arc<ArcSwap<Option<ConfiguredSupergraph>>> =
             Arc::new(ArcSwap::from(Arc::new(None)));
@@ -724,6 +735,7 @@ impl SchemaState {
             hive: router_config.telemetry.hive.clone(),
             storage_manager: storage_manager.clone(),
             graphql_endpoint: router_config.http.graphql_endpoint.clone(),
+            subgraph_auth_service,
         });
 
         // `supergraph.source: plugin` has no configured source at all... no loader, no polling
@@ -1101,6 +1113,7 @@ mod plugin_runtime_cache_tests {
             hive: None,
             storage_manager: Arc::new(StorageManager::new(&Default::default()).unwrap()),
             graphql_endpoint: "/graphql".to_string(),
+            subgraph_auth_service: None,
         });
         SchemaState {
             configured: Arc::new(ArcSwap::from(Arc::new(None))),
@@ -1147,6 +1160,7 @@ mod plugin_runtime_cache_tests {
             }),
             storage_manager: state.runtime_context.storage_manager.clone(),
             graphql_endpoint: state.runtime_context.graphql_endpoint.clone(),
+            subgraph_auth_service: None,
         });
         state
     }
@@ -1181,6 +1195,7 @@ mod plugin_runtime_cache_tests {
             hive: context.hive.clone(),
             storage_manager: context.storage_manager.clone(),
             graphql_endpoint: context.graphql_endpoint.clone(),
+            subgraph_auth_service: None,
         });
         state
     }
@@ -1615,6 +1630,7 @@ mod plugin_runtime_cache_tests {
                     hive: None,
                     storage_manager: Arc::new(StorageManager::new(&Default::default()).unwrap()),
                     graphql_endpoint: "/graphql".to_string(),
+                    subgraph_auth_service: None,
                 },
             )
             .await

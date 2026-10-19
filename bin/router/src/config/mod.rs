@@ -1,3 +1,4 @@
+pub mod authentication;
 pub mod authorization;
 pub mod cache;
 pub mod coprocessor;
@@ -38,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{collections::HashMap, convert::Infallible};
 
+use crate::config::authentication::AwsSigV4Config;
 use crate::config::error_masking::ErrorMaskingConfig;
 use crate::config::storage::StorageConfigMap;
 use crate::config::{
@@ -128,6 +130,10 @@ pub struct HiveRouterConfig {
 
     #[serde(default)]
     pub authorization: authorization::AuthorizationConfig,
+
+    /// Configuration for AWS SigV4 request signing to subgraphs.
+    #[serde(default, skip_serializing_if = "AwsSigV4Config::is_disabled")]
+    pub aws_sig_v4: AwsSigV4Config,
 
     #[serde(default)]
     /// Configuration for checking the limits such as query depth, complexity, etc.

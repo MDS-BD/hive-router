@@ -2791,6 +2791,7 @@ dependencies = [
  "graphql-differential",
  "graphql-tools",
  "headers-accept",
+ "hex",
  "hive-console-sdk",
  "http",
  "http-body-util",
@@ -2851,6 +2852,10 @@ dependencies = [
  "rand 0.10.3",
  "recloser",
  "regex-automata",
+ "reqsign-aws-v4",
+ "reqsign-core",
+ "reqsign-file-read-tokio",
+ "reqsign-http-send-reqwest",
  "reqwest 0.12.28",
  "reqwest-middleware",
  "reqwest-retry",
@@ -2861,6 +2866,7 @@ dependencies = [
  "schemars 1.2.3",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sonic-rs",
  "sonic-simd",
  "strum 0.28.0",
@@ -6210,6 +6216,16 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
+version = "0.38.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
+name = "quick-xml"
 version = "0.39.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdcc8dd4e2f670d309a5f0e83fe36dfdc05af317008fea29144da1a2ac858e5e"
@@ -6568,6 +6584,79 @@ name = "rend"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cadadef317c2f20755a64d7fdc48f9e7178ee6b0e1f7fce33fa60f1d68a276e6"
+
+[[package]]
+name = "reqsign-aws-v4"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab367a07c335a3eaa22395a9d9b0031ac73aee5893573281b2fa27bf97dc94f2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "form_urlencoded",
+ "http",
+ "log",
+ "percent-encoding",
+ "quick-xml 0.38.4",
+ "reqsign-core",
+ "rust-ini",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha1 0.10.6",
+]
+
+[[package]]
+name = "reqsign-core"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ba66eb941c0f723269a394baf3b19a2fa697a1e593f3e902779df6c35d24e21"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "form_urlencoded",
+ "hex",
+ "hmac 0.12.1",
+ "http",
+ "jiff",
+ "log",
+ "percent-encoding",
+ "sha1 0.10.6",
+ "sha2 0.10.9",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "reqsign-file-read-tokio"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "702f12a867bf8e507de907fa0f4d75b96469ace7edd33fcc1fc8a8ef58f3c8d2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqsign-core",
+ "tokio",
+]
+
+[[package]]
+name = "reqsign-http-send-reqwest"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46186bce769674f9200ad01af6f2ca42de3e819ddc002fff1edae135bfb6cd9c"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures-channel",
+ "http",
+ "http-body-util",
+ "reqsign-core",
+ "reqwest 0.12.28",
+ "wasm-bindgen-futures",
+]
 
 [[package]]
 name = "reqwest"
@@ -7641,7 +7730,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -7949,7 +8038,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

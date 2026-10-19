@@ -57,6 +57,7 @@ pub struct SupergraphOptions {
     pub demand_control: Option<DemandControlConfig>,
     pub subscriptions: SupergraphSubscriptionsConfig,
     pub error_masking: ErrorMaskingConfig,
+    pub aws_sig_v4: crate::config::authentication::AwsSigV4Config,
     pub persisted_documents: PersistedDocumentsConfig,
     pub hive_target: Option<String>,
     /// Cache limits for this supergraph.
@@ -89,6 +90,7 @@ impl TryFrom<&HiveRouterConfig> for SupergraphOptions {
             demand_control: config.demand_control.clone(),
             subscriptions: (&config.subscriptions).into(),
             error_masking: config.error_masking.clone(),
+            aws_sig_v4: config.aws_sig_v4.clone(),
             persisted_documents: config.persisted_documents.clone(),
             hive_target,
             // configured supergraph inherits `cache.supergraph` by default

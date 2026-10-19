@@ -117,3 +117,9 @@ tracing-appender = "0.2.5"
 
 # Storage
 object_store = { version = "0.13.2", features = ["aws"] }
+
+# AWS SigV4
+reqsign-aws-v4 = "2"
+reqsign-core = "2"
+reqsign-file-read-tokio = "2"
+reqsign-http-send-reqwest = "2"

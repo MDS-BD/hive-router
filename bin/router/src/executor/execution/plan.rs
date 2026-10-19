@@ -1962,6 +1962,7 @@ mod tests {
                 &Default::default(),
             )),
             Arc::new(DashMap::new()),
+            None,
         )
         .unwrap();
 
@@ -2094,6 +2095,7 @@ mod tests {
                     &Default::default(),
                 )),
                 Arc::new(DashMap::new()),
+                None,
             )
             .unwrap(),
             client_request: &ClientRequestDetails {
